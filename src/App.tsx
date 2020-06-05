@@ -1,11 +1,15 @@
-import React from 'react';
+import React, { Component } from 'react';
 
 import './App.css';
 
-const App = () => {
-  return (
-    <h1>Hello World</h1>
-  );
+import Routes from './routes';
+
+class App extends Component {
+  render() {
+    return (
+      <Routes />
+    );
+  }
 }
 
 export default App;
