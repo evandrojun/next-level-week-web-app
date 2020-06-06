@@ -1,21 +1,25 @@
-import React, { Component, ChangeEvent } from 'react';
-import { Link } from 'react-router-dom';
+import React, { Component, ChangeEvent, FormEvent } from 'react';
+import { Link, useHistory } from 'react-router-dom';
 import { FiArrowLeft } from 'react-icons/fi';
 
 import ibge from '../../../services/ibge';
 import server from '../../../services/server';
 import logo from '../../../assets/logo.svg';
 import RegisterMap from '../../../components/RegisterMap';
-import { Item, IbgeResponse } from '../../../utils/project_interfaces';
+import { Item, IbgeResponse, FormData } from '../../../utils/project_interfaces';
 
 import './styles.css';
 
 interface State {
   items: Array<Item>
+  selectedItems: Array<number>
   ufs: Array<string>
   cities: Array<string>
   selectedUf: string,
   selectedCity: string,
+  selectedPosition: [number, number]
+
+  formData: FormData,
 }
 
 class RegisterPoint extends Component<{}, State> {
@@ -24,26 +28,90 @@ class RegisterPoint extends Component<{}, State> {
 
     this.state = {
       items: [],
+      selectedItems: [],
       ufs: [],
       selectedUf: '',
       cities: [],
       selectedCity: '',
+
+      selectedPosition: [0, 0],
+
+      formData: {
+        name: '',
+        email: '',
+        whatsapp: '',
+      }
     }
 
     this.handleUfSelection = this.handleUfSelection.bind(this);
     this.handleCitySelection = this.handleCitySelection.bind(this);
+    this.handleInputChange = this.handleInputChange.bind(this);
+    this.handleItemClick = this.handleItemClick.bind(this);
+    this.handleSubmit = this.handleSubmit.bind(this);
+    this.setSelectedPosition = this.setSelectedPosition.bind(this);
   }
 
   handleUfSelection(event: ChangeEvent<HTMLSelectElement>) {
     const uf = event.target.value;
 
     this.setState({ selectedUf: uf });
+
+    ibge.get<Array<IbgeResponse>>(`/localidades/estados/${uf}/municipios`).then(response => {
+      const cityNames = response.data.map(city => city.nome);
+
+      this.setState({ cities: cityNames });
+    });
   }
 
   handleCitySelection(event: ChangeEvent<HTMLSelectElement>) {
     const city = event.target.value;
 
     this.setState({ selectedCity: city });
+  }
+
+  handleInputChange(event: ChangeEvent<HTMLInputElement>) {
+    const { name, value } = event.target;
+
+    this.setState({ formData: { ...this.state.formData, [name]: value } });
+  }
+
+  handleItemClick(id: number) {
+    const alreadySelectedItem = this.state.selectedItems.findIndex(item => item === id);
+
+    if (alreadySelectedItem >= 0) {
+      const filteredItems = this.state.selectedItems.filter(item => item !== id);
+
+      this.setState({ selectedItems: filteredItems });
+    } else {
+      this.setState({ selectedItems: [...this.state.selectedItems, id] });
+    }
+  }
+
+  async handleSubmit(event: FormEvent) {
+    event.preventDefault();
+
+    const { name, email, whatsapp } = this.state.formData;
+    const uf = this.state.selectedUf;
+    const city = this.state.selectedCity;
+    const [latitude, longitude] = this.state.selectedPosition;
+    const items = this.state.selectedItems;
+
+    const data = {
+      name,
+      email,
+      whatsapp,
+      uf,
+      city,
+      latitude,
+      longitude,
+      items
+    }
+
+    await server.post('points', data);
+  }
+
+  setSelectedPosition(latitude: number, longitude: number) {
+    this.setState({ selectedPosition: [latitude, longitude] })
   }
 
   componentDidMount() {
@@ -55,18 +123,6 @@ class RegisterPoint extends Component<{}, State> {
       const stateInitials = response.data.map(uf => uf.sigla);
 
       this.setState({ ufs: stateInitials });
-    });
-  };
-
-  componentDidUpdate() {
-    server.get('items').then(response => {
-      this.setState({ items: response.data });
-    });
-
-    ibge.get<Array<IbgeResponse>>(`/localidades/estados/${this.state.selectedUf}/municipios`).then(response => {
-      const cityNames = response.data.map(city => city.nome);
-
-      this.setState({ cities: cityNames });
     });
   };
 
@@ -82,7 +138,7 @@ class RegisterPoint extends Component<{}, State> {
           </Link>
         </header>
 
-        <form>
+        <form onSubmit={this.handleSubmit}>
           <h1>Cadastro do <br /> ponto de coleta</h1>
 
           <fieldset>
@@ -92,18 +148,18 @@ class RegisterPoint extends Component<{}, State> {
 
             <div className="field">
               <label htmlFor="name">Nome da entidade</label>
-              <input type="text" name="name" id="name" />
+              <input type="text" name="name" id="name" onChange={this.handleInputChange} />
             </div>
 
             <div className="field-group">
               <div className="field">
                 <label htmlFor="email">E-mail</label>
-                <input type="email" name="email" id="email" />
+                <input type="email" name="email" id="email" onChange={this.handleInputChange} />
               </div>
 
               <div className="field">
                 <label htmlFor="whatsapp">Whatsapp</label>
-                <input type="text" name="whatsapp" id="whatsapp" />
+                <input type="text" name="whatsapp" id="whatsapp" onChange={this.handleInputChange} />
               </div>
             </div>
           </fieldset>
@@ -114,7 +170,7 @@ class RegisterPoint extends Component<{}, State> {
               <span>Selecione o endereço no mapa</span>
             </legend>
 
-            <RegisterMap />
+            <RegisterMap setSelectedPosition={this.setSelectedPosition} />
 
             <div className="field-group">
               <div className="field">
@@ -151,7 +207,11 @@ class RegisterPoint extends Component<{}, State> {
 
             <ul className="items-grid">
               {this.state.items.map(item => (
-                <li key={item.id}>
+                <li
+                  key={item.id}
+                  onClick={() => this.handleItemClick(item.id)}
+                  className={this.state.selectedItems.includes(item.id) ? 'selected' : ''}
+                >
                   <img src={item.image_url} alt={item.title} />
                   <span>{item.title}</span>
                 </li>
