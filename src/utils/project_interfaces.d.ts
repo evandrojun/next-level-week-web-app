@@ -6,10 +6,16 @@ declare namespace ProjectInterfaces {
     id: number,
     image_url: string,
     title: string,
-  }
+  };
 
   interface IbgeResponse {
     sigla: string,
     nome: string,
-  }
+  };
+
+  interface FormData {
+    name: string,
+    email: string,
+    whatsapp: string,
+  };
 }
